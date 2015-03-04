@@ -1,0 +1,56 @@
+Abstract
+Do NOT copy core controller files into local scope to overwrite them - it may not work as intended because Magento implements Zend autoloading of controllers on request only and it is different then autoloading of blocks, models, etc. 
+Background
+In Verktøy we had an issue with form key validation not working properly on incorrectly cached blocks.
+There were two kind of problems:
+adding products to carts was silently failing and redirecting to empty cart
+users were not able to log in
+This means that two controllers were involved: CartController and AccountController.
+Quickfix
+Actions in both controllers (addAction and loginPostAction) are checking in the first lines if the form key is valid. If it is not then redirect ocures.
+We couldn't modify core files because of problems with future Magento updates or patches. To gain some time before fixing the real issue we decided to copy both controller files from core to local and disable form key check in both methods:
+app/code/core/Mage/Checkout/controllers/CartController.php >>> app/code/local/Mage/Checkout/controllers/CartController.php
+app/code/core/Mage/Customer/controllers/AccountController.php >>> app/code/local/Mage/Customer/controllers/AccountController.php
+Does not work
+It came up, that Magento loads our customized CartController from local scope, but AccountController is still loaded from core scope. 
+Why AccountController didn't work as expected? 
+Just take a look at \Mage_Core_Controller_Varien_Router_Standard::getControllerFileName
+\Mage_Core_Controller_Varien_Router_Standard::getControllerFileName
+public function getControllerFileName($realModule, $controller)
+{
+    $parts = explode('_', $realModule);
+    $realModule = implode('_', array_splice($parts, 0, 2));
+    $file = Mage::getModuleDir('controllers', $realModule);
+    if (count($parts)) {
+        $file .= DS . implode(DS, $parts);
+    }
+    $file .= DS.uc_words($controller, DS).'Controller.php';
+    return $file;
+}
+ 
+As you see it uses $file = Mage::getModuleDir('controllers', $realModule); which builds a file path based on settings in etc/modules/MODULE.xml which looks like this:
+Mage_All.xml
+<Mage_Customer>
+    <active>true</active>
+    <codePool>core</codePool>
+</Mage_Customer>
+It means that file from core scope is going to be loaded, always.
+Why CartController did work as expected? 
+Coincidence. On Verktøy there is also Icommecre_QuickCheckoutCart module in which CartController is overwritten in "Magento way": 
+app/code/local/Icommerce/QuickCheckoutCart/etc/config.xml
+<routers>
+          <checkout>
+              <args>
+                  <modules>
+                      <Icommerce_QuickCheckoutCart before="Mage_Checkout">Icommerce_QuickCheckoutCart</Icommerce_QuickCheckoutCart>
+                  </modules>
+              </args>
+          </checkout>
+</routers>
+In addition Icommerce_QuickCheckoutCart_CartController extends Mage_Checkout_CartController:
+app/code/local/Icommerce/QuickCheckoutCart/controllers/CartController.php
+<?php
+require_once 'Mage/Checkout/controllers/CartController.php';
+class Icommerce_QuickCheckoutCart_CartController extends Mage_Checkout_CartController {...}
+It means that Icommerce_QuickCheckoutCart_CartController is loaded by Magento when playing with request object and using Mage_Core_Controller_Varien_Router_Standard::getControllerFileName(). 
+Why then Mage_Checkout_CartController is loaded from local scope? From the section "Why CartController did work as expected?" we know it should be loaded from core scope accordingly to XML config! It is not the case - Mage_Checkout_CartController is loaded because of require_once statement, which triggers standard Magento autoloader which checks for file existance accordingly to scopes priority (local, community, core). Voila!
