@@ -1,0 +1,14 @@
+#!/bin/bash
+
+ENVIRONMENT=$1
+
+INSTANCES=$(aja project info -e $ENVIRONMENT -k instances)
+FIRST_INSTANCE=$(echo $INSTANCES | grep -o "v[0-9]\{2,3\}")
+
+echo "instance: "$FIRST_INSTANCE
+
+ADMIN_PASS=$(dbrootpass $FIRST_INSTANCE)
+echo -n $ADMIN_PASS  | pbcopy
+echo $ADMIN_PASS " (copied to clipboard)"
+
+exit 0;
