@@ -1,0 +1,4 @@
+#https://www.ateamsystems.com/tech-blog/using-dig-to-find-domain-dns-ttl/
+
+dig +nocmd +noall +answer domain.com
+dig +nocmd +noall +answer @8.8.8.8 domain.com
