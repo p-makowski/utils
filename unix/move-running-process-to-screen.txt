@@ -1,0 +1,80 @@
+# 	https://www.linkedin.com/pulse/move-running-process-screen-bruce-werdschinski/
+
+A quick guide on how to move a running linux process to the screen terminal multiplexer.
+
+When connecting to a remote linux server most of the time I’m doing a quick task such as looking at log files or doing routine server maintenance. It only takes a few minutes. But sometimes I launch a process that can take many hours to run. Those long running processes are normally related to technical SEO tasks such as multi-gigabyte log file analysis, site crawls and data scraping, or to admin tasks such as database migrations.
+
+To be as efficient with my own time as possible a common workflow would be to start a long running process in the afternoon, and then later in the evening from home I’d monitor the progress and perform any cleanup as needed. The snag there is that I’d start the operation from my work computer and be in my home office in the evening. To get that to work we use a terminal multiplexer which is software that allows us to create, detach and then reattach linux sessions.
+
+My terminal multiplexer of choice is screen, although some people prefer tmux. My needs are simple and screen works just fine. Matt Cutts wrote a quick tutorial on screen in 2007 which explains what it is and how it’s used.
+
+Now, when performing quick and simple tasks I don’t use screen. There’s no point as the session will only last a few minutes. Every now and then though I discover that a running task is taking much longer than expected, or I’ve simply forgotten to use screen to begin with. In that case we’re left with three options:
+
+Stay back late in the office for an unknown length of time(!!),
+Quit the current process, losing any unsaved work and potentially wasting hours of processing, or
+Move the running process to a new screen shell. This is the solution that I’ll describe in the rest of this post.
+Move the running process to a new screen shell
+Most of the commands that we’ll be using are builtin commands, but you’ll need to install two programs to complete this task. Firstly and rather obviously, screen. The second is reptyr. If you need some assistance with that here’s a great guide on installing software on Linux.
+
+The steps we need to take are:
+
+Suspend the process
+Resume the process in the background
+Disown the process
+Launch a screen session
+Find the PID of the process
+Use reptyr to take over the process
+I’ll summarise the steps into a sequence of commands to be used, but first let’s have a quick look at which each step entails.
+
+Suspend the process
+The first thing that we need to do is to suspend the process by pressing Ctrl+Z.
+
+When you press Ctrl+Z the TSTP signal is sent to the process. This halts the execution and the kernel won’t schedule any more CPU time to the process.
+
+Resume the process in the background
+Type in the bg command. This sends the SIGCONT signal to the process and it’s now happily running in the background.
+
+Disown the process
+We now run the disown command like so: disown %1
+
+Disown removes the process from the table of active jobs, essentially allowing it to be taken over by another session.
+
+Launch a screen session
+This is pretty easy, we now run the screen command which is where our process will soon be moved to.
+
+Find the PID of the process
+Now we need to find the Process ID, (PID) of the process we’d like to take over. The method I use and recommend is pgrep. As an example if our process is called myprogram we can run the command pgrep myprogram which will return the PID.
+
+Use reptyr to take over the process
+Finally we pass the PID to reptyr to take over the process. If pgrep gave us a PID of 1234, we can now use the command: reptyr 1234
+
+Pro tip: You can combine pgrep and reptyr together with the following syntax: reptyr $(pgrep myprogram)
+
+Summary
+As a quick reference guide:
+
+Suspend the process with Ctrl+Z
+Resume the process in the background with bg
+Disown the process with disown %1
+Launch a screen session with screen
+Find the PID of the process using pgrep
+Use reptyr to take over the process reptyr
+Success! Now we’re able to exit screen and reattach from another computer at another time.
+
+The Ubuntu Ptrace gotcha
+There’s one gotcha though, with Ubuntu. As a security measure Maverick Meerkat (Ubuntu 10.10) introduced a patch that disallows ptracing of non-child processes by non-root users. This stops reptyr from working.
+
+To disable this setting permanently you can edit the /etc/sysctl.d/10-ptrace.conf file and setkernel.yama.ptrace_scope to 0. You’ll then need to update the kernel parameters by running sudo sysctl -p /etc/sysctl.d/10-ptrace.conf
+
+However if you only want to disable ptrace scoping temporarily you can use the following command before reptyr: echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope, and then this one after using reptyr: echo 1 | sudo tee /proc/sys/kernel/yama/ptrace_scope
+
+So for Ubuntu our quick reference guide is:
+
+Suspend the process with Ctrl+Z
+Resume the process in the background with bg
+Disown the process with disown %1
+Launch a screen session with screen
+Find the PID of the process using pgrep
+Enable ptracing with echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope
+Use reptyr to take over the process reptyr
+Disable ptracing with echo 1 | sudo tee /proc/sys/kernel/yama/ptrace_scope
